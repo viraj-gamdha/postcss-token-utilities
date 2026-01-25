@@ -11,7 +11,6 @@ It is designed for projects that want:
 - Minimal, predictable utility generation
 - The ability to mix utilities with CSS Modules and traditional CSS
 
-
 Use utilities where they make sense, use modern CSS everywhere else.
 
 ---
@@ -28,10 +27,10 @@ postcss-token-utilities takes a different approach:
 - CSS remains the source of truth
 
 This makes it ideal for teams that want:
+
 - full control over design tokens
 - minimal utility CSS
 - no imposed design constraints
-
 
 ## Get Started
 
@@ -154,7 +153,7 @@ Here is example of tokens supported by default
 **utilities.css**
 
 ```css
-/* Required */
+/* ⚠️ Important */
 @layer utilities-gen {
   /* Generated utility classes will auto injected here */
 }
@@ -175,12 +174,34 @@ Here is example of tokens supported by default
 }
 ```
 
-**media.css** - Breakpoints
+**media.css** - Breakpoints & Media Variants
 
 ```css
-@custom-media --sm (width <= 640px);
-@custom-media --md (width <= 768px);
-@custom-media --lg (width <= 1024px);
+/* Responsive Breakpoints */
+@custom-media --xsm (width <= 350px);
+@custom-media --sm (width <= 550px);
+@custom-media --md (width <= 900px);
+@custom-media --lg (width <= 1200px);
+@custom-media --xl (width <= 1800px);
+
+/* Theme Preferences */
+@custom-media --dark (prefers-color-scheme: dark);
+@custom-media --light (prefers-color-scheme: light);
+
+/* Motion Preferences */
+@custom-media --motion-safe (prefers-reduced-motion: no-preference);
+@custom-media --motion-reduce (prefers-reduced-motion: reduce);
+
+/* Contrast Preferences */
+@custom-media --contrast-more (prefers-contrast: more);
+@custom-media --contrast-less (prefers-contrast: less);
+
+/* Orientation */
+@custom-media --portrait (orientation: portrait);
+@custom-media --landscape (orientation: landscape);
+
+/* Print Media */
+@custom-media --print (print);
 ```
 
 **globals.css** - Import all
@@ -193,14 +214,14 @@ Here is example of tokens supported by default
 @import "./components.css";
 @import "./utilities.css";
 
+/* We will globally import media.css using 'postcss-global-data' */
+
 /* Optional: If you have very specific overrides / resets that should win */
 @layer overrides {
 }
 ```
 
-### PostCSS Plugin Configuration
-
-_Configuration Options_
+### Plugin Configuration
 
 **Required**
 
@@ -250,7 +271,7 @@ module.exports = {
     "postcss-token-utilities": {
       designTokenSource: "./src/styles/app.css",
       customMediaSource: "./src/styles/media.css",
-      content: ["./src/**/*.{js,jsx,ts,tsx}", "./app/**/*.{js,jsx,ts,tsx}"],
+      content: ["./src/**/*.{js,jsx,ts,tsx}"],
       // ... more options (generated, extend, etc.) go here, read more for details ...
     },
 
@@ -272,8 +293,7 @@ module.exports = {
 // vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { resolve, basename } from "path";
-import crypto from "crypto";
+import { resolve } from "path";
 
 // postcss plugins
 import postcssPresetEnv from "postcss-preset-env";
@@ -291,25 +311,6 @@ export default defineConfig({
   plugins: [react()],
 
   css: {
-    // modify css modules class names
-    modules: {
-      generateScopedName: (className, filePath) => {
-        const rawFileName = basename(filePath); // App.module.css
-        const cleaned = rawFileName
-          .replace(/\b.module\b/, "")
-          .replace(/\.[^/.]+$/, "")
-          .toLowerCase();
-
-        const hash = crypto
-          .createHash("sha256")
-          .update(`${cleaned}_${className}`)
-          .digest("hex")
-          .slice(0, 5);
-
-        return `${cleaned}_${className}_${hash}`;
-      },
-    },
-
     // postcss config
     postcss: {
       plugins: [
@@ -333,7 +334,7 @@ export default defineConfig({
         tokenUtilities({
           designTokenSource: "./src/styles/app.css",
           customMediaSource: "./src/styles/media.css",
-          content: ["./src/**/*.[jt]s", "./src/**/*.[jt]sx"],
+          content: ["./src/**/*.{js,jsx,ts,tsx,astro}"],
           // ... more options (generated, extend, etc.) go here, read more for details ...
         }),
 
@@ -345,7 +346,7 @@ export default defineConfig({
 });
 ```
 
-### Example Component
+### Example Usage (React)
 
 ```jsx
 // button.tsx
@@ -365,23 +366,15 @@ export function Button({ variant, children }) {
 // Mix utilities with CSS modules as needed
 ```
 
-```css
-/* button.module.css */
-.base {
-  background: linear-gradient(
-    to right,
-    var(--color-secondary),
-    var(--color-muted)
-  );
-  color: var(--color-foreground);
-}
-```
+---
 
-## Rules
+# Rules
 
 The plugin generates utilities from three types of rules:
 
-### 1. Static Rules
+> View the [source code](https://github.com/viraj-gamdha/postcss-token-utilities/blob/main/src/default-config.ts) for the complete list of default rules.
+
+## 1. Static Rules
 
 Pre-defined utilities that don't depend on CSS variables.
 
@@ -392,17 +385,16 @@ interface StaticRule {
 }
 ```
 
-**Default Static Rules (Included by Default)**
+**Default Static Rules (Pre-added)**
 
 ```javascript
   // e.g.
   { class: "flex", css: "display: flex" },
   // + all important static rules
   // please refer the source code for more details
-  // or can refer generated css file for more details
 ```
 
-### 2. Token Rules
+## 2. Token Rules
 
 Utilities generated from CSS variables in your design tokens.
 
@@ -414,7 +406,7 @@ interface TokenRule {
 }
 ```
 
-**Default Token Rules (Included by Default)**
+**Default Token Rules (Pre-added)**
 
 ```javascript
  // e.g. token: spacing
@@ -431,80 +423,145 @@ interface TokenRule {
   // please refer the source code for more details
 ```
 
-### More examples
+## 3. Variant Rules
 
-| Token        | Prefix        | Example           | Generated CSS                                                     |
-| ------------ | ------------- | ----------------- | ----------------------------------------------------------------- |
-| `spacing`    | `p-`          | `p-4`             | `padding: var(--spacing-4)`                                       |
-| `spacing`    | `px-`         | `px-4`            | `padding-left: var(--spacing-4); padding-right: var(--spacing-4)` |
-| `color`      | `bg-`         | `bg-primary`      | `background-color: var(--color-primary)`                          |
-| `color`      | `text-`       | `text-primary`    | `color: var(--color-primary)`                                     |
-| `border`     | `border-`     | `border-1`        | `border-width: var(--border-1)`                                   |
-| `shadow`     | `shadow-`     | `shadow-md`       | `box-shadow: var(--shadow-md)`                                    |
-| `transition` | `transition-` | `transition-base` | `transition: var(--transition-base)`                              |
-
-### 3. Variant Rules
-
-Modifiers for utilities (pseudo-classes and media queries). Variants allow you to apply utilities conditionally, such as on hover, focus, dark mode, or specific screen sizes.
+Variants allow you to apply utilities conditionally based on state, media queries, or ancestor elements. The plugin supports three types: **pseudo**, **media**, and **ancestor**.
 
 ```typescript
-interface VariantRule {
+interface BaseVariantRule {
   name: string;
-  type: "pseudo" | "media";
-  condition?: string; // Required for media variants
+}
+interface PseudoVariantRule extends BaseVariantRule {
+  type: "pseudo";
+}
+interface MediaVariantRule extends BaseVariantRule {
+  type: "media";
+  condition: string; // Required for media
+}
+interface AncestorVariantRule extends BaseVariantRule {
+  type: "ancestor";
+  selector: string; // Required for ancestor
+}
+type VariantRule = PseudoVariantRule | MediaVariantRule | AncestorVariantRule;
+```
+
+### i. Pseudo Variants (Pre-added)
+
+Apply common interactive and structural states using pseudo-classes.
+
+```javascript
+// Interactive states
+{ name: "hover", type: "pseudo" },
+{ name: "focus", type: "pseudo" },
+{ name: "active", type: "pseudo" },
+{ name: "disabled", type: "pseudo" },
+{ name: "checked", type: "pseudo" },
+
+// Structural states
+{ name: "first", type: "pseudo" },
+{ name: "last", type: "pseudo" },
+{ name: "odd", type: "pseudo" },
+{ name: "even", type: "pseudo" },
+// ... and more (see source for complete list)
+```
+
+**Usage examples:**  
+`hover:bg-primary`, `focus:ring-2`, `active:scale-95`, `disabled:opacity-50`, `first:mt-0`, `odd:bg-gray-100`
+
+### ii. Media Variants (Pre-added)
+
+Media variants are automatically generated from your `@custom-media` definitions in `media.css`. This approach keeps your breakpoints centralized and reusable in both utility classes and raw CSS.
+
+These are automatically converted to variants like `sm:, md:, dark:, motion-safe:, etc.`
+
+**In your `media.css`:**
+
+```css
+/* Responsive Breakpoints */
+@custom-media --sm (width <= 550px);
+@custom-media --md (width <= 900px);
+@custom-media --lg (width <= 1200px);
+
+/* Theme Preferences */
+@custom-media --dark (prefers-color-scheme: dark);
+@custom-media --light (prefers-color-scheme: light);
+
+/* Motion & Accessibility */
+@custom-media --motion-safe (prefers-reduced-motion: no-preference);
+@custom-media --portrait (orientation: portrait);
+@custom-media --print (print);
+```
+
+These are automatically converted to variants like `sm:`, `md:`, `dark:`, `motion-safe:`, etc.
+
+**Usage in utility classes:**  
+`dark:bg-gray-900`, `light:bg-white`, `print:hidden`, `motion-safe:transition-all`, `portrait:flex-col`, `sm:px-4`, `md:flex-row`, `lg:grid-cols-3`
+
+**Usage in raw CSS:**
+
+```css
+.my-component {
+  padding: 1rem;
+
+  @media (--md) {
+    padding: 2rem;
+  }
+
+  @media (--dark) {
+    background: var(--color-dark);
+  }
 }
 ```
 
-**Pseudo Variants (Pre-added):**
+### iii. Ancestor Variants (Pre-added)
 
-These are automatically included and apply common interactive states.
-
-```javascript
-{ name: "hover",    type: "pseudo" },
-{ name: "focus",    type: "pseudo" },
-{ name: "active",   type: "pseudo" },
-{ name: "disabled", type: "pseudo" },
-```
-
-**Usage examples:**  
-`hover:bg-primary`, `focus:ring-2`, `active:scale-95`, `disabled:opacity-50`
-
-**Media Variants (Pre-added):**
-
-These include common accessibility and theme preferences, plus responsive breakpoints auto-generated from your `@custom-media` definitions in `media.css`.
+Apply utilities based on parent or sibling element states. Perfect for hover effects on children or sibling-based interactions.
 
 ```javascript
-{ name: "dark",       type: "media", condition: "prefers-color-scheme: dark" }
-{ name: "print",      type: "media", condition: "print" }
-{ name: "motion-safe", type: "media", condition: "prefers-reduced-motion: no-preference" }
+// Group variants (any descendant)
+{ name: "group-hover", type: "ancestor", selector: ".group:hover" },
+{ name: "group-focus", type: "ancestor", selector: ".group:focus" },
+{ name: "group-active", type: "ancestor", selector: ".group:active" },
 
-// Auto-generated from @custom-media in media.css (examples):
-{ name: "sm", type: "media", condition: "width <= 640px" }
-{ name: "md", type: "media", condition: "width <= 768px" }
-{ name: "lg", type: "media", condition: "width <= 1024px" }
+// Group Direct variants (immediate children only)
+{ name: "group-hover-direct", type: "ancestor", selector: ".group:hover >" },
+{ name: "group-focus-direct", type: "ancestor", selector: ".group:focus >" },
+// ... and more (see source for complete list)
 ```
 
-**Usage examples:**  
-`dark:bg-gray-900`, `print:hidden`, `motion-safe:transition-all`, `md:flex-row`, `lg:grid-cols-3`
+**Usage examples:**
 
-### Summary of variant rules
+```html
+<!-- Group: Works on any nested descendant -->
+<div class="group">
+  <div>
+    <button class="group-hover:bg-primary">Hover parent to change me</button>
+  </div>
+</div>
 
-| Variant       | Type   | Condition / Trigger                     | Typical Usage Example        | Description                                |
-| ------------- | ------ | --------------------------------------- | ---------------------------- | ------------------------------------------ |
-| `hover`       | pseudo | `:hover`                                | `hover:bg-blue-500`          | Mouse hover state                          |
-| `focus`       | pseudo | `:focus`                                | `focus:outline-none`         | Keyboard focus / form focus                |
-| `active`      | pseudo | `:active`                               | `active:scale-95`            | Click/tap active state                     |
-| `disabled`    | pseudo | `:disabled`                             | `disabled:opacity-60`        | Disabled form elements                     |
-| `dark`        | media  | `prefers-color-scheme: dark`            | `dark:text-white`            | System dark mode preference                |
-| `print`       | media  | `@media print`                          | `print:hidden`               | When printing the page                     |
-| `motion-safe` | media  | `prefers-reduced-motion: no-preference` | `motion-safe:transition-all` | Users who haven't requested reduced motion |
-| `sm`          | media  | `@custom-media --sm (width <= 640px)`   | `sm:flex-col`                | Small screens / mobile                     |
-| `md`          | media  | `@custom-media --md (width <= 768px)`   | `md:grid-cols-2`             | Medium screens / tablet                    |
-| `lg`          | media  | `@custom-media --lg (width <= 1024px)`  | `lg:text-xl`                 | Large screens / desktop                    |
+<!-- Group Direct: Only immediate children -->
+<div class="group">
+  <button class="group-hover-direct:bg-primary">Works (direct child)</button>
+  <div>
+    <button class="group-hover-direct:bg-primary">Won't work (nested)</button>
+  </div>
+</div>
+```
 
 ## Extending Rules
 
-### Extend Token Rules
+### i. Extend Static Rules
+
+```javascript
+extend: {
+  staticRules: [
+    { class: "aspect-video", css: "aspect-ratio: 16/9" },
+    { class: "aspect-square", css: "aspect-ratio: 1/1" },
+  ],
+}
+```
+
+### ii. Extend Token Rules
 
 Add new CSS variables, register them as token rules.
 
@@ -518,53 +575,41 @@ Add new CSS variables, register them as token rules.
 }
 ```
 
+**Register the new token**
+
 ```javascript
 // postcss.config.js
-module.exports = {
-  plugins: {
-    "postcss-token-utilities": {
-      designTokenSource: "./src/styles/app.css",
-      customMediaSource: "./src/styles/media.css",
-      content: ["./src/**/*.{js,jsx,ts,tsx}"],
-
-      // register the new token
-      extend: {
-        tokenRules: [
-          {
-            token: "line-height",
-            prefix: "leading-",
-            css: (_k, v) => `line-height: ${v};`,
-            // This will generate all specific classes
-            // leading-tight -> line-height: var(--line-height-1.2)
-            // leading-normal -> line-height: var(--line-height-1.5)
-            // leadding-loose -> line-height: var(--line-height-2)
-          },
-        ],
+ ...
+  extend: {
+    tokenRules: [
+      {
+        token: "line-height",
+        prefix: "leading-",
+        css: (_k, v) => `line-height: ${v};`,
+        // This will generate all specific classes
+        // leading-tight -> line-height: var(--line-height-1.2)
+        // leading-normal -> line-height: var(--line-height-1.5)
+        // leadding-loose -> line-height: var(--line-height-2)
       },
-    },
+    ],
   },
-};
+
 ```
 
-### Extend Static Rules
+### iii. Extend Variant Rules
 
 ```javascript
-extend: {
-  staticRules: [
-    { class: "aspect-video", css: "aspect-ratio: 16/9" },
-    { class: "aspect-square", css: "aspect-ratio: 1/1" },
-  ],
-}
-```
-
-### Extend Variant Rules
-
-```javascript
+...
 extend: {
   variantRules: [
-    { name: "group-hover", type: "pseudo" },
-    { name: "first", type: "pseudo" },
-    { name: "landscape", type: "media", condition: "orientation: landscape" },
+    // Custom pseudo variant
+    { name: "visited", type: "pseudo" },
+
+    // Custom media variant (recommended to add via media.css)
+    { name: "xl", type: "media", condition: "width >= 1280px" },
+
+    // Custom ancestor variant
+    { name: "peer-checked", type: "ancestor", selector: ".peer:checked ~" },
   ],
 }
 ```
@@ -572,6 +617,7 @@ extend: {
 ### Disable Default Rules
 
 ```javascript
+...
 {
   defaultRules: {
     staticRules: false,   // Disable all defaults
@@ -584,7 +630,9 @@ extend: {
 }
 ```
 
-## Generated Dev File for IntelliSense
+---
+
+# Generated Dev File for IntelliSense
 
 The plugin can generate a reference file for autocomplete Intellisence in your IDE (using extensions like `CSS Navigation`).
 
@@ -606,6 +654,7 @@ generated: {
 - Only the CSS you actually use will be included in your final build (JIT + Auto purging).
 
 This file acts as:
+
 - a compiled utility index
 - an IntelliSense source for editors
 - a cache to improve PostCSS performance
@@ -651,12 +700,12 @@ e.g.
 
 ### Usage with preprocessors
 
- Preprocessors like `Sass/SCSS/Less` can be used, but not tested yet and may require additional configuration to avoid conflicts with @layer and PostCSS processing.
+Preprocessors like `Sass/SCSS/Less` can be used, but not tested yet and may require additional configuration to avoid conflicts with @layer and PostCSS processing.
 
 ## NOTE
-**⚠️ Experimental project**
+
 - postcss-token-utilities is currently in early development.
-The source code and API may change as the project evolves.
+  The source code and API may change as the project evolves.
 
 ## License
 

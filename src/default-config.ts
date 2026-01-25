@@ -480,21 +480,39 @@ const DEFAULT_TOKEN_RULES: TokenRule[] = [
 
 // Variant rules hover:, focus:, dark:, md:, lg: etc.
 const DEFAULT_VARIANT_RULES: VariantRule[] = [
+  // i. Pseudo-class variants (Interactive states)
   { name: "hover", type: "pseudo" },
   { name: "focus", type: "pseudo" },
+  { name: "focus-within", type: "pseudo" },
+  { name: "focus-visible", type: "pseudo" },
   { name: "active", type: "pseudo" },
   { name: "disabled", type: "pseudo" },
-  {
-    name: "dark",
-    type: "media",
-    condition: "prefers-color-scheme: dark",
-  },
-  { name: "print", type: "media", condition: "print" },
-  {
-    name: "motion-safe",
-    type: "media",
-    condition: "prefers-reduced-motion: no-preference",
-  },
+  { name: "checked", type: "pseudo" },
+
+  // Structural pseudo-classes
+  { name: "first", type: "pseudo" },
+  { name: "last", type: "pseudo" },
+  { name: "only", type: "pseudo" },
+  { name: "odd", type: "pseudo" },
+  { name: "even", type: "pseudo" },
+  { name: "first-of-type", type: "pseudo" },
+  { name: "last-of-type", type: "pseudo" },
+  { name: "only-of-type", type: "pseudo" },
+
+  // ii. Media query variants (Responsive & Preferences)
+  // Most of the media variants can be easily added via @custom-media from media.css ...
+  // And those can be used as utilities in classes also in css files
+
+  // iii. Ancestor variants (Group & Peer patterns)
+  // Group - for parent hover/focus states (any descendant)
+  { name: "group-hover", type: "ancestor", selector: ".group:hover" },
+  { name: "group-focus", type: "ancestor", selector: ".group:focus" },
+  { name: "group-active", type: "ancestor", selector: ".group:active" },
+
+  // Group Direct - for immediate children only
+  { name: "group-hover-direct", type: "ancestor", selector: ".group:hover >" },
+  { name: "group-focus-direct", type: "ancestor", selector: ".group:focus >" },
+  { name: "group-active", type: "ancestor", selector: ".group:active >" },
 ];
 
 export {

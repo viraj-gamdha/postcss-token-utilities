@@ -24,11 +24,27 @@ export interface TokenRule {
   prefix: string;
   css: (key: string, value: string) => string;
 }
-export interface VariantRule {
+
+// Variant rules
+export interface BaseVariantRule {
   name: string;
-  type: "pseudo" | "media";
-  condition?: string;
 }
+export interface PseudoVariantRule extends BaseVariantRule {
+  type: "pseudo";
+}
+export interface MediaVariantRule extends BaseVariantRule {
+  type: "media";
+  condition: string; // Required for media
+}
+export interface AncestorVariantRule extends BaseVariantRule {
+  type: "ancestor";
+  selector: string; // Required for ancestor
+}
+export type VariantRule =
+  | PseudoVariantRule
+  | MediaVariantRule
+  | AncestorVariantRule;
+
 export interface PluginOptions {
   designTokenSource: string;
   customMediaSource?: string;
@@ -198,6 +214,9 @@ class UtilityGenerator {
           vCss = `.${escaped}:${v.name} { ${css} }`;
         } else if (v.type === "media" && v.condition) {
           vCss = `@media (${v.condition}) { .${escaped} { ${css} } }`;
+        } else if (v.type === "ancestor" && v.selector) {
+          // Enables group-hover, group-focus, etc. that require parent selectors
+          vCss = `${v.selector} .${escaped} { ${css} }`;
         }
 
         if (vCss) {
