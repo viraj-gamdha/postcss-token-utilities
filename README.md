@@ -2,8 +2,6 @@
 
 A token-driven utility CSS generator for PostCSS. It generates utility classes from modern CSS custom properties and injects only the utilities you actually use, while preserving a CSS-first workflow.
 
-## What is this?
-
 This is not a `Tailwind CSS` replacement.
 
 It is designed for projects that want:
