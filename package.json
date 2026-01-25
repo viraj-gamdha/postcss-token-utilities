@@ -45,12 +45,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aplance/postcss-token-utilities.git"
+    "url": "git+https://github.com/viraj-gamdha/postcss-token-utilities.git"
   },
   "bugs": {
-    "url": "https://github.com/aplance/postcss-token-utilities/issues"
+    "url": "https://github.com/viraj-gamdha/postcss-token-utilities/issues"
   },
-  "homepage": "https://github.com/aplance/postcss-token-utilities#readme",
+  "homepage": "https://github.com/viraj-gamdha/postcss-token-utilities#readme",
   "peerDependencies": {
     "postcss": "^8.4"
   },
