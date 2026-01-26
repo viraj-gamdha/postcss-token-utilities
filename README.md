@@ -481,15 +481,8 @@ These are automatically converted to variants like `sm:, md:, dark:, motion-safe
 @custom-media --sm (width <= 550px);
 @custom-media --md (width <= 900px);
 @custom-media --lg (width <= 1200px);
-
-/* Theme Preferences */
-@custom-media --dark (prefers-color-scheme: dark);
-@custom-media --light (prefers-color-scheme: light);
-
-/* Motion & Accessibility */
-@custom-media --motion-safe (prefers-reduced-motion: no-preference);
-@custom-media --portrait (orientation: portrait);
-@custom-media --print (print);
+ /* add more as required...  */
+/* (take reference from media.css file from above) */
 ```
 
 These are automatically converted to variants like `sm:`, `md:`, `dark:`, `motion-safe:`, etc.
