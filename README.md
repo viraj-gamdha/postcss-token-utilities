@@ -1,3 +1,5 @@
+# Introduction
+
 A compact, token-driven utility CSS generator for PostCSS that creates utilities directly from CSS custom properties and injects only what you actually use.
 
 It is **not a Tailwind CSS replacement**, but a lightweight alternative for **token-based design systems** that prefer minimal utilities and native CSS. It follows a **modern CSS-first** approach rather than utility-first, where design tokens and real CSS stay at the core and utilities act as a small supporting layer.
