@@ -1,36 +1,27 @@
-# postcss-token-utilities
+A compact, token-driven utility CSS generator for PostCSS that creates utilities directly from CSS custom properties and injects only what you actually use.
 
-A token-driven utility CSS generator for PostCSS. It generates utility classes from modern CSS custom properties and injects only the utilities you actually use, while preserving a CSS-first workflow.
+It is **not a Tailwind CSS replacement**, but a lightweight alternative for **token-based design systems** that prefer minimal utilities and native CSS. It follows a **modern CSS-first** approach rather than utility-first, where design tokens and real CSS stay at the core and utilities act as a small supporting layer.
 
-This is not a `Tailwind CSS` replacement.
-
-It is designed for projects that want:
-
-- Token-driven utilities instead of predefined design systems
-- A `modern CSS-first` workflow (@layer, custom properties, @custom-media)
-- Minimal, predictable utility generation
-- The ability to mix utilities with CSS Modules and traditional CSS
-
-Use utilities where they make sense, use modern CSS everywhere else.
-
----
 
 ## Why postcss-token-utilities?
 
-Most utility frameworks ship large predefined design systems.
+- Your design tokens define the system, not a framework
 
-postcss-token-utilities takes a different approach:
+- Utilities are generated directly from your tokens
 
-- Your design tokens define the system
-- Utilities are generated from your tokens
-- Only used utilities are injected
+- Only used utilities are injected (JIT-style)
+
 - CSS remains the source of truth
 
-This makes it ideal for teams that want:
+- Flexible and extensible - define or extend your own rules easily
 
-- full control over design tokens
-- minimal utility CSS
-- no imposed design constraints
+- Works naturally with CSS Modules and traditional CSS
+
+- `No arbitrary values` - only meaningful, predictable token-based utilities
+
+- Extremely compact compared to full utility frameworks
+
+- Familiar feel if you’ve used Tailwind CSS, but without heavy overhead
 
 ## Get Started
 
@@ -48,7 +39,7 @@ src/styles/
 ├── app.css           # Design tokens (CSS variables) – @layer base
 ├── components.css    # Component styles – @layer components
 ├── utilities.css     # Custom/hand-written utilities – @layer utilities-gen - @layer utilities
-└── media.css         # Breakpoints (@custom-media definitions)
+└── media.css         # Breakpoints / Media variants (@custom-media definitions)
 
 ```
 
@@ -68,7 +59,7 @@ One change to `--spacing-1` updates every `p-1`, `m-1`, `gap-1` instantly - no r
 
 **app.css** - Define your design tokens
 
-Here is example of tokens supported by default
+Here is example of 10 tokens supported by default
 
 ```css
 :root {
@@ -86,7 +77,7 @@ Here is example of tokens supported by default
   --font-weight-light: 300;
   --font-weight-medium: 500;
   --font-weight-bold: 700;
-    /* add more spacing vars... */
+  /* add more spacing vars... */
 
   /* 4. spacing */
   /* Spacing Tokens also applied for height width sizes (w-1, w-container-max, min-2 etc...*/
@@ -133,8 +124,16 @@ Here is example of tokens supported by default
     0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
 
+/* Manual dark mode */
 [data-theme="dark"] {
-  // add dark mode overrides here...
+  /* ...dark theme overrides */
+}
+
+/* System dark mode */
+@media (--dark) {
+  :root {
+    /* ...dark theme overrides  */
+  }
 }
 ```
 
@@ -178,7 +177,6 @@ Here is example of tokens supported by default
 
 ```css
 /* Responsive Breakpoints */
-@custom-media --xsm (width <= 350px);
 @custom-media --sm (width <= 550px);
 @custom-media --md (width <= 900px);
 @custom-media --lg (width <= 1200px);
@@ -245,6 +243,14 @@ Here is example of tokens supported by default
   - `tokenRules?: boolean`
   - `variantRules?: boolean`
 - `logs?: boolean` - Enable logs - Default: `false`
+
+## Configuration
+
+**Recommended plugins to install**
+
+```
+npm i -D @csstools/postcss-global-data postcss-preset-env cssnano
+```
 
 ### PostCSS Config (Recommended Example)
 
@@ -349,24 +355,23 @@ export default defineConfig({
 ### Example Usage (React)
 
 ```jsx
-// button.tsx
-import styles from "./button.module.css";
-import clsx from "clsx";
+import { Button } from "./button";
 
-export function Button({ variant, children }) {
+export function Example() {
   return (
-    <button
-      className={clsx(styles.base, "px-4 py-2 rounded-lg transition-base")}
-    >
-      {children}
-    </button>
+    <div className="flex gap-4 mt-4">
+      <Button>Primary</Button>
+      <Button variant="secondary" className="shadow-md">
+        Secondary
+      </Button>
+      <Button variant="bordered" className="text-primary">
+        Bordered
+      </Button>
+    </div>
   );
 }
-
-// Mix utilities with CSS modules as needed
 ```
 
----
 
 # Rules
 
@@ -481,7 +486,7 @@ These are automatically converted to variants like `sm:, md:, dark:, motion-safe
 @custom-media --sm (width <= 550px);
 @custom-media --md (width <= 900px);
 @custom-media --lg (width <= 1200px);
- /* add more as required...  */
+/* add more as required...  */
 /* (take reference from media.css file from above) */
 ```
 
@@ -623,8 +628,6 @@ extend: {
 }
 ```
 
----
-
 # Generated Dev File for IntelliSense
 
 The plugin can generate a reference file for autocomplete Intellisence in your IDE (using extensions like `CSS Navigation`).
@@ -699,6 +702,8 @@ Preprocessors like `Sass/SCSS/Less` can be used, but not tested yet and may requ
 
 - postcss-token-utilities is currently in early development.
   The source code and API may change as the project evolves.
+- Successfully tested with projects using **Vite + React**, **Next.js**, and **Astro**
+
 
 ## License
 
@@ -714,5 +719,3 @@ MIT
 If you find this plugin helpful, consider buying me a coffee! ☕
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-black?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/virajpatel)
-
-
