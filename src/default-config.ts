@@ -1,4 +1,4 @@
-import { StaticRule, TokenRule, VariantRule } from "./types";
+import { StaticRule, TokenRule, VariantRule } from ".";
 
 const DEFAULT_EXTRACTION_CONFIG: Required<{
   attributes?: string[];

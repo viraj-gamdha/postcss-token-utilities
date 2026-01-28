@@ -1,6 +1,6 @@
 import { type PluginCreator, parse } from "postcss";
 import fs from "fs";
-import { resolve } from "path";
+import { join, resolve } from "path";
 import { createHash } from "crypto";
 import glob from "fast-glob";
 import {
@@ -9,31 +9,111 @@ import {
   DEFAULT_TOKEN_RULES,
   DEFAULT_VARIANT_RULES,
 } from "./default-config";
-import {
-  DesignTokens,
-  PluginOptions,
-  StaticRule,
-  TokenRule,
-  VariantRule,
-} from "./types";
+import { pathToFileURL } from "url";
 
 const PLUGIN_NAME = "postcss-token-utilities";
+const RULES_FILE_NAMES = [
+  "token-utilities.rules.ts",
+  "token-utilities.rules.js",
+  "token-utilities.rules.mjs",
+];
+
+// Types
+export type DesignTokens = Record<string, Record<string, string>>;
+export interface StaticRule {
+  class: string;
+  css: string;
+}
+export interface TokenRule {
+  token: string;
+  prefix: string;
+  css: (key: string, value: string) => string;
+}
+
+// Variant rules
+export interface BaseVariantRule {
+  name: string;
+}
+export interface PseudoVariantRule extends BaseVariantRule {
+  type: "pseudo";
+}
+export interface MediaVariantRule extends BaseVariantRule {
+  type: "media";
+  condition: string; // Required for media
+}
+export interface AncestorVariantRule extends BaseVariantRule {
+  type: "ancestor";
+  selector: string; // Required for ancestor
+}
+export type VariantRule =
+  | PseudoVariantRule
+  | MediaVariantRule
+  | AncestorVariantRule;
+
+// combined interface for all rules
+export interface Rules {
+  staticRules?: StaticRule[];
+  tokenRules?: TokenRule[];
+  variantRules?: VariantRule[];
+}
+
+export interface PluginOptions {
+  designTokenSource: string;
+  customMediaSource?: string;
+  content: string[];
+  extraction?: { attributes?: string[]; functions?: string[] };
+  generated?:
+    | {
+        path: string;
+      }
+    | false;
+  extend?: Rules;
+  defaultRules?: {
+    staticRules?: boolean;
+    tokenRules?: boolean;
+    variantRules?: boolean;
+  };
+  logs?: boolean;
+}
 
 // Global Process Caches (Persist across hot-reloads)
-// 1. The "Universe" Cache: The read-only database of all possible classes
 let universeCache: {
   configHash: string;
   cssMap: Map<string, string>;
   rawCss: string;
 } | null = null;
 
-// 2. The File Scan Cache: Stores mtime and classes per file
+// The File Scan Cache: Stores mtime and classes per file
 const fileScanCache = new Map<
   string,
   { mtime: number; classes: Set<string> }
 >();
 
-// Logic: Class Extractor
+async function loadRulesFile(cwd: string): Promise<Rules | null> {
+  for (const fileName of RULES_FILE_NAMES) {
+    const rulesPath = join(cwd, fileName);
+
+    if (fs.existsSync(rulesPath)) {
+      try {
+        // Node.js caches imports - without this, changes won't be detected
+        const fileUrl = pathToFileURL(rulesPath).href;
+        const cacheBustedUrl = `${fileUrl}?t=${Date.now()}`;
+        const rulesModule = await import(cacheBustedUrl);
+
+        // Support both default export and named exports
+        const rules = rulesModule.default || rulesModule;
+
+        return rules;
+      } catch (error) {
+        console.warn(`[${PLUGIN_NAME}] Failed to load ${fileName}:`, error);
+      }
+    }
+  }
+
+  return null;
+}
+
+// Class Extractor
 class ClassExtractor {
   private attrRegex: RegExp;
   private funcRegex: RegExp;
@@ -72,7 +152,7 @@ class ClassExtractor {
   }
 }
 
-// Logic: Universe Utility Generator
+// Universe Utility Generator
 class UtilityGenerator {
   private tokens: DesignTokens = {};
   private rules: {
@@ -197,22 +277,63 @@ class UtilityGenerator {
 const postcssTokenUtilities: PluginCreator<PluginOptions> = (
   opts = { designTokenSource: "", content: [] },
 ) => {
-  const enableLogs = opts?.logs ?? false;
-
   return {
     postcssPlugin: PLUGIN_NAME,
 
     async Once(root, { result }) {
-      // Validation
-      if (!opts.designTokenSource || !opts.content.length) return;
-
       const cwd = process.cwd();
-      const tokenPath = resolve(cwd, opts.designTokenSource);
-      const mediaPath = opts.customMediaSource
-        ? resolve(cwd, opts.customMediaSource)
+      const rulesFile = await loadRulesFile(cwd);
+
+      const finalOpts: PluginOptions = {
+        ...opts,
+        extend: {
+          staticRules: [
+            ...(rulesFile?.staticRules || []),
+            ...(opts.extend?.staticRules || []),
+          ],
+          tokenRules: [
+            ...(rulesFile?.tokenRules || []),
+            ...(opts.extend?.tokenRules || []),
+          ],
+          variantRules: [
+            ...(rulesFile?.variantRules || []),
+            ...(opts.extend?.variantRules || []),
+          ],
+        },
+      };
+
+      const rulesFileName = RULES_FILE_NAMES.find((name) =>
+        fs.existsSync(join(cwd, name)),
+      );
+
+      if (rulesFileName) {
+        const rulesFilePath = join(cwd, rulesFileName);
+        result.messages.push({
+          type: "dependency",
+          plugin: PLUGIN_NAME,
+          file: rulesFilePath,
+          parent: result.opts.from,
+        });
+      }
+
+      const enableLogs = finalOpts?.logs ?? false;
+
+      // Validation
+      if (!finalOpts.designTokenSource || !finalOpts.content.length) {
+        if (enableLogs) {
+          console.warn(
+            `[${PLUGIN_NAME}] Missing required config: designTokenSource and content are required in postcss.config.`,
+          );
+        }
+        return;
+      }
+
+      const tokenPath = resolve(cwd, finalOpts.designTokenSource);
+      const mediaPath = finalOpts.customMediaSource
+        ? resolve(cwd, finalOpts.customMediaSource)
         : null;
 
-      // 1. Read Config Sources
+      // Read Config Sources
       let tokenCss = "",
         mediaCss = "";
 
@@ -244,16 +365,16 @@ const postcssTokenUtilities: PluginCreator<PluginOptions> = (
         .update(
           tokenCss +
             mediaCss +
-            JSON.stringify(opts.extend || {}) +
-            JSON.stringify(opts.defaultRules || {}),
+            JSON.stringify(finalOpts.extend || {}) +
+            JSON.stringify(finalOpts.defaultRules || {}),
         )
         .digest("hex");
 
       const defaultOutPath = "src/styles/utilities.gen.css";
 
       const rawOutPath =
-        opts.generated !== false
-          ? opts.generated?.path || defaultOutPath
+        finalOpts.generated !== false
+          ? finalOpts.generated?.path || defaultOutPath
           : null;
 
       const normalizedOutPath =
@@ -270,7 +391,7 @@ const postcssTokenUtilities: PluginCreator<PluginOptions> = (
       const GEN_CSS_PATTERN = "**/*.gen.css";
 
       if (universeCache?.configHash !== configHash) {
-        const gen = new UtilityGenerator(opts, {
+        const gen = new UtilityGenerator(finalOpts, {
           tokens: tokenCss,
           media: mediaCss,
         });
@@ -279,7 +400,7 @@ const postcssTokenUtilities: PluginCreator<PluginOptions> = (
         universeCache = { configHash, cssMap: map, rawCss };
 
         // Write to disk (Only on Universe change & if option is there)
-        if (opts.generated && outPath) {
+        if (finalOpts.generated && outPath) {
           const header = [
             "/* ========================================= */",
             "/* AUTO-GENERATED FILE                       */",
@@ -329,10 +450,10 @@ const postcssTokenUtilities: PluginCreator<PluginOptions> = (
         }
       }
 
-      const extractor = new ClassExtractor(opts.extraction);
+      const extractor = new ClassExtractor(finalOpts.extraction);
       const usedClasses = new Set<string>();
 
-      const files = await glob(opts.content, {
+      const files = await glob(finalOpts.content, {
         cwd,
         absolute: true,
         ignore: ["**/node_modules/**", "**/.next/**", GEN_CSS_PATTERN],

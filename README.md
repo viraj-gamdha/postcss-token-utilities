@@ -4,7 +4,6 @@ A compact, token-driven utility CSS generator for PostCSS that creates utilities
 
 It is **not a Tailwind CSS replacement**, but a lightweight alternative for **token-based design systems** that prefer minimal utilities and native CSS. It follows a **modern CSS-first** approach rather than utility-first, where design tokens and real CSS stay at the core and utilities act as a small supporting layer.
 
-
 ## Why postcss-token-utilities?
 
 - Your design tokens define the system, not a framework
@@ -248,7 +247,7 @@ Here is example of 10 tokens supported by default
 
 ## Configuration
 
-**Recommended plugins to install**
+**Suggested plugins to install**
 
 ```
 npm i -D @csstools/postcss-global-data postcss-preset-env cssnano
@@ -260,12 +259,12 @@ npm i -D @csstools/postcss-global-data postcss-preset-env cssnano
 // postcss.config.js
 module.exports = {
   plugins: {
-    // Recommended: global @custom-media / variables support
+    // global @custom-media / variables support
     "@csstools/postcss-global-data": {
       files: ["./src/styles/media.css"],
     },
 
-    // Recommended: Modern CSS features + @custom-media polyfill
+    // Modern CSS features + @custom-media polyfill
     "postcss-preset-env": {
       stage: 2,
       features: {
@@ -322,12 +321,12 @@ export default defineConfig({
     // postcss config
     postcss: {
       plugins: [
-        // Recommended: global @custom-media / variables support
+        // global @custom-media / variables support
         postcssGlobalData({
           files: ["./src/styles/media.css"],
         }),
 
-        // Recommended: Modern CSS features + @custom-media polyfill
+        // Modern CSS features + @custom-media polyfill
         postcssPresetEnv({
           stage: 2,
           preserve: true,
@@ -373,7 +372,6 @@ export function Example() {
   );
 }
 ```
-
 
 # Rules
 
@@ -548,75 +546,90 @@ Apply utilities based on parent or sibling element states. Perfect for hover eff
 </div>
 ```
 
-## Extending Rules
+# Extending Rules
 
-### i. Extend Static Rules
+Extend default rules in two ways:
 
-```javascript
-extend: {
-  staticRules: [
-    { class: "aspect-video", css: "aspect-ratio: 16/9" },
-    { class: "aspect-square", css: "aspect-ratio: 1/1" },
-  ],
-}
-```
+### Option 1: Inline Extension (Quick)
 
-### ii. Extend Token Rules
-
-Add new CSS variables, register them as token rules.
-
-**Add token to CSS:**
-
-```css
-:root {
-  --line-height-tight: 1.2;
-  --line-height-normal: 1.5;
-  --line-height-loose: 2;
-}
-```
-
-**Register the new token**
+Add rules directly in `postcss.config.js` or `vite.config.ts`:
 
 ```javascript
-// postcss.config.js
- ...
+postcssTokenUtilities({
+  ...otherOptions
   extend: {
+    staticRules: [
+      { class: "aspect-video", css: "aspect-ratio: 16/9" },
+    ],
+
+     // First, add token (line-height) vars to your app.css (in root:{...}):
+     // --line-height-tight: 1.2;
+     // --line-height-loose: 2;
     tokenRules: [
       {
         token: "line-height",
         prefix: "leading-",
         css: (_k, v) => `line-height: ${v};`,
-        // This will generate all specific classes
-        // leading-tight -> line-height: var(--line-height-1.2)
-        // leading-normal -> line-height: var(--line-height-1.5)
-        // leadding-loose -> line-height: var(--line-height-2)
       },
+      // Generates: leading-tight, leading-loose automatically
+    ],
+
+    variantRules: [
+      { name: "visited", type: "pseudo" },
     ],
   },
-
+})
 ```
 
-### iii. Extend Variant Rules
+### Option 2: Rules File (Recommended)
 
-```javascript
-...
-extend: {
+Create `token-utilities.rules.ts` or `.js / .mjs` in your project root for better organization:
+
+```typescript
+import type { Rules } from "postcss-token-utilities";
+
+const rules: Rules = {
+  staticRules: [
+    { class: "aspect-video", css: "aspect-ratio: 16/9" },
+    { class: "aspect-square", css: "aspect-ratio: 1/1" },
+  ],
+
+  // First, add token (line-height) vars to your app.css (in root:{...}):
+  // --line-height-tight: 1.2;
+  // --line-height-loose: 2;
+  tokenRules: [
+    {
+      token: "line-height",
+      prefix: "leading-",
+      css: (_k, v) => `line-height: ${v};`,
+      // Generates: leading-tight, leading-loose automatically
+    },
+  ],
+
   variantRules: [
-    // Custom pseudo variant
-    { name: "visited", type: "pseudo" },
-
-    // Custom media variant (recommended to add via media.css)
-    { name: "xl", type: "media", condition: "width >= 1280px" },
-
-    // Custom ancestor variant
     { name: "peer-checked", type: "ancestor", selector: ".peer:checked ~" },
   ],
-}
+};
+
+export default rules;
 ```
 
-### Disable Default Rules
+Then use the plugin normally in `postcss.config.js` - rules auto-load:
 
 ```javascript
+postcssTokenUtilities({
+  designTokenSource: "src/styles/app.css",
+  ...
+  // Rules from token-utilities.rules.ts automatically included!
+});
+```
+
+**Note:** For media variants, prefer adding to `media.css` with `@custom-media` instead of variant rules.
+
+## Disable Default Rules
+
+```javascript
+// postcss.config or vite.config
 ...
 {
   defaultRules: {
@@ -625,7 +638,8 @@ extend: {
     variantRules: false,
   },
   extend: {
-    // Add only your rules
+    // Add only your rules here
+    // Or in a token-utilities.rules.ts
   }
 }
 ```
@@ -700,12 +714,9 @@ e.g.
 
 Preprocessors like `Sass/SCSS/Less` can be used, but not tested yet and may require additional configuration to avoid conflicts with @layer and PostCSS processing.
 
-## NOTE
+## NOTES
 
-- postcss-token-utilities is currently in early development.
-  The source code and API may change as the project evolves.
 - Successfully tested with projects using **Vite + React**, **Next.js**, and **Astro**
-
 
 ## License
 
