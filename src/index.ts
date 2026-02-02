@@ -4,7 +4,7 @@ import { join, resolve } from "path";
 import { createHash } from "crypto";
 import glob from "fast-glob";
 import {
-  DEFAULT_EXTRACTION_CONFIG,
+  DEFAULT_CLASS_MATCHER,
   DEFAULT_STATIC_RULES,
   DEFAULT_TOKEN_RULES,
   DEFAULT_VARIANT_RULES,
@@ -61,7 +61,7 @@ export interface PluginOptions {
   designTokenSource: string;
   customMediaSource?: string;
   content: string[];
-  extraction?: { attributes?: string[]; functions?: string[] };
+  classMatcher?: string[];
   generated?:
     | {
         path: string;
@@ -89,66 +89,71 @@ const fileScanCache = new Map<
   { mtime: number; classes: Set<string> }
 >();
 
-async function loadRulesFile(cwd: string): Promise<Rules | null> {
-  for (const fileName of RULES_FILE_NAMES) {
-    const rulesPath = join(cwd, fileName);
-
-    if (fs.existsSync(rulesPath)) {
-      try {
-        // Node.js caches imports - without this, changes won't be detected
-        const fileUrl = pathToFileURL(rulesPath).href;
-        const cacheBustedUrl = `${fileUrl}?t=${Date.now()}`;
-        const rulesModule = await import(cacheBustedUrl);
-
-        // Support both default export and named exports
-        const rules = rulesModule.default || rulesModule;
-
-        return rules;
-      } catch (error) {
-        console.warn(`[${PLUGIN_NAME}] Failed to load ${fileName}:`, error);
-      }
-    }
-  }
-
-  return null;
-}
-
-// Class Extractor
 class ClassExtractor {
-  private attrRegex: RegExp;
-  private funcRegex: RegExp;
+  private matchers: string[];
 
-  constructor(config: { attributes?: string[]; functions?: string[] } = {}) {
-    const opts = { ...DEFAULT_EXTRACTION_CONFIG, ...config };
-
-    const attrPattern = opts.attributes.join("|");
-    this.attrRegex = new RegExp(
-      `(?:${attrPattern})\\s*=\\s*["'\`{]([^"'\`}]+)["'\`}]`,
-      "g",
-    );
-
-    const funcPattern = opts.functions.join("|");
-    this.funcRegex = new RegExp(`(?:${funcPattern})\\s*\\(([^)]+)\\)`, "g");
+  constructor(matchers: string[] = []) {
+    this.matchers = [...DEFAULT_CLASS_MATCHER, ...(matchers || [])];
   }
 
   extract(content: string): Set<string> {
     const classes = new Set<string>();
-    let match: RegExpExecArray | null;
 
-    this.attrRegex.lastIndex = 0;
-    while ((match = this.attrRegex.exec(content)) !== null) {
-      match[1].split(/\s+/).forEach((c) => c && classes.add(c));
-    }
+    for (const matcher of this.matchers) {
+      // Find all positions where matcher appears
+      let index = 0;
+      while ((index = content.indexOf(matcher, index)) !== -1) {
+        // Get the next 500 characters after the matcher (covers most use cases)
+        const chunk = content.substring(index, index + 500);
 
-    this.funcRegex.lastIndex = 0;
-    while ((match = this.funcRegex.exec(content)) !== null) {
-      const stringMatches = match[1].matchAll(/["'`]([^"'`]+)["'`]/g);
-      for (const strMatch of stringMatches) {
-        strMatch[1].split(/\s+/).forEach((c) => c && classes.add(c));
+        // Extract all quoted strings from this chunk
+        this.extractQuotedStrings(chunk, classes);
+
+        index += matcher.length;
       }
     }
 
     return classes;
+  }
+
+  // Covers "class", 'class', `class`, arrays, objects, etc.
+  private extractQuotedStrings(text: string, classes: Set<string>): void {
+    // Match all quoted strings: "...", '...', `...`
+    const quotedStrings = text.matchAll(/["'`]([^"'`]+)["'`]/g);
+
+    for (const match of quotedStrings) {
+      const content = match[1];
+
+      // Split by whitespace to get individual classes
+      content.split(/\s+/).forEach((className) => {
+        className = className.trim();
+
+        // Validate: must look like a valid utility class
+        if (this.isValidClassName(className)) {
+          classes.add(className);
+        }
+      });
+    }
+  }
+
+  // Filter out obvious non-classes (URLs, paths, long strings)
+  private isValidClassName(str: string): boolean {
+    if (!str || str.length === 0 || str.length > 100) return false;
+
+    // Skip obvious non-classes
+    if (
+      str.includes("://") || // URLs
+      str.includes("\\") || // Paths
+      str.startsWith("/") || // Paths
+      str.includes("(") || // Functions
+      str.includes("{") || // Objects
+      str.includes("[") // Arrays
+    ) {
+      return false;
+    }
+
+    // Valid class: letters, numbers, hyphens, colons, underscores, dots
+    return /^[a-zA-Z0-9_:.-]+$/.test(str);
   }
 }
 
@@ -271,6 +276,29 @@ class UtilityGenerator {
 
     return { map, raw };
   }
+}
+
+// Helper for loading rules from file
+async function loadRulesFile(cwd: string): Promise<Rules | null> {
+  for (const fileName of RULES_FILE_NAMES) {
+    const rulesPath = join(cwd, fileName);
+
+    if (fs.existsSync(rulesPath)) {
+      try {
+        const fileUrl = pathToFileURL(rulesPath).href;
+        const cacheBustedUrl = `${fileUrl}?t=${Date.now()}`;
+        const rulesModule = await import(cacheBustedUrl);
+
+        const rules = rulesModule.default || rulesModule;
+
+        return rules;
+      } catch (error) {
+        console.warn(`[${PLUGIN_NAME}] Failed to load ${fileName}:`, error);
+      }
+    }
+  }
+
+  return null;
 }
 
 // Plugin Definition
@@ -450,7 +478,7 @@ const postcssTokenUtilities: PluginCreator<PluginOptions> = (
         }
       }
 
-      const extractor = new ClassExtractor(finalOpts.extraction);
+      const extractor = new ClassExtractor(finalOpts?.classMatcher);
       const usedClasses = new Set<string>();
 
       const files = await glob(finalOpts.content, {

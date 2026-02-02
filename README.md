@@ -60,7 +60,7 @@ One change to `--spacing-1` updates every `p-1`, `m-1`, `gap-1` instantly - no r
 
 **app.css** - Define your design tokens
 
-Here is example of 10 tokens supported by default
+Here is example of 11 tokens supported by default
 
 ```css
 :root {
@@ -123,6 +123,12 @@ Here is example of 10 tokens supported by default
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg:
     0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* 11. line-height */
+  --line-height-sm: 1;
+  --line-height-md: 1.25;
+  --line-height-lg: 2;
+  /* and more... */
 }
 
 /* Manual dark mode */
@@ -230,9 +236,9 @@ Here is example of 10 tokens supported by default
 **Optional**
 
 - `customMediaSource?: string` - Path to @custom-media file
-- `extraction?: object` - Class extraction config
-  - `attributes: string[]` - Default: `["className", "class", "class:list"]`
-  - `functions: string[]` - Default: `["clsx", "cn", "classNames", "classList"]`
+- `classMatcher?: string[]` - For class names extraction
+  - Default: `["className","class","classList","class:list","clsx","cn"]`
+  - Will extend the defaults
 - `generated?: object | false` - Dev reference file generation
   - `path: string` - Output path (e.g. ./src/styles/utilities.gen.css)
 - `extend?: object` - Extend default rules
@@ -562,16 +568,17 @@ postcssTokenUtilities({
       { class: "aspect-video", css: "aspect-ratio: 16/9" },
     ],
 
-     // First, add token (line-height) vars to your app.css (in root:{...}):
-     // --line-height-tight: 1.2;
-     // --line-height-loose: 2;
+    // Example:
+    // First, add token (size) vars to your app.css (in root:{...}):
+    // --size-xs: 1rem;
+    // --size-xl: 3rem;
     tokenRules: [
       {
-        token: "line-height",
-        prefix: "leading-",
-        css: (_k, v) => `line-height: ${v};`,
+        token: "size",
+        prefix: "size-",
+        css: (k, v) => `width: ${v}; height: ${v};`,
       },
-      // Generates: leading-tight, leading-loose automatically
+      // Generates: size-xs, size-xl (square sizing with key reference)
     ],
 
     variantRules: [
@@ -594,16 +601,20 @@ const rules: Rules = {
     { class: "aspect-square", css: "aspect-ratio: 1/1" },
   ],
 
-  // First, add token (line-height) vars to your app.css (in root:{...}):
-  // --line-height-tight: 1.2;
-  // --line-height-loose: 2;
+  // Example:
+  // First, add token (background) vars to your app.css (in root:{...}):
+  // --background-custom: #3b82f6;
+  // --background-gradient-sunset: linear-gradient(to right, #f97316, #ec4899);
   tokenRules: [
     {
-      token: "line-height",
-      prefix: "leading-",
-      css: (_k, v) => `line-height: ${v};`,
-      // Generates: leading-tight, leading-loose automatically
+      token: "background",
+      prefix: "bg-",
+      css: (k, v) =>
+        k.includes("gradient")
+          ? `background-image: ${v};`
+          : `background-color: ${v};`,
     },
+    // Generates: bg-custom (color), bg-gradient-sunset (gradient)
   ],
 
   variantRules: [

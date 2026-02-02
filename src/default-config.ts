@@ -1,12 +1,13 @@
 import { StaticRule, TokenRule, VariantRule } from ".";
 
-const DEFAULT_EXTRACTION_CONFIG: Required<{
-  attributes?: string[];
-  functions?: string[];
-}> = {
-  attributes: ["className", "class", "class:list"],
-  functions: ["clsx", "cn", "classNames", "classList"],
-};
+const DEFAULT_CLASS_MATCHER: string[] = [
+  "className",
+  "class",
+  "classList",
+  "class:list",
+  "clsx",
+  "cn",
+];
 
 // Default Rules
 
@@ -476,6 +477,13 @@ const DEFAULT_TOKEN_RULES: TokenRule[] = [
     prefix: "transition-",
     css: (_k, v) => `transition: ${v};`,
   },
+
+  // Others
+  {
+    token: "line-height",
+    prefix: "leading-",
+    css: (_k, v) => `line-height: ${v};`,
+  },
 ];
 
 // Variant rules hover:, focus:, dark:, md:, lg: etc.
@@ -516,7 +524,7 @@ const DEFAULT_VARIANT_RULES: VariantRule[] = [
 ];
 
 export {
-  DEFAULT_EXTRACTION_CONFIG,
+  DEFAULT_CLASS_MATCHER,
   DEFAULT_STATIC_RULES,
   DEFAULT_TOKEN_RULES,
   DEFAULT_VARIANT_RULES,
