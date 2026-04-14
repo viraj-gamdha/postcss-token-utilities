@@ -60,7 +60,7 @@ One change to `--spacing-1` updates every `p-1`, `m-1`, `gap-1` instantly - no r
 
 **app.css** - Define your design tokens
 
-Here is example of 11 tokens supported by default
+Here are the token categories supported by default. Add only the ones you need — each pre-added token rule is a no-op when its category has no variables, so it costs nothing.
 
 ```css
 :root {
@@ -78,10 +78,14 @@ Here is example of 11 tokens supported by default
   --font-weight-light: 300;
   --font-weight-medium: 500;
   --font-weight-bold: 700;
-  /* add more spacing vars... */
 
-  /* 4. spacing */
-  /* Spacing Tokens also applied for height width sizes (w-1, w-container-max, min-2 etc...*/
+  /* 4. letter-spacing  → tracking-* */
+  --letter-spacing-tight: -0.025em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.025em;
+
+  /* 5. spacing */
+  /* Spacing tokens also drive width/height/min/max/inset/scroll-m/scroll-p/basis */
   --spacing-0: 0;
   --spacing-1: 0.25rem;
   --spacing-2: 0.5rem;
@@ -90,45 +94,67 @@ Here is example of 11 tokens supported by default
   --spacing-container-max: 500px;
   /* add more spacing vars... */
 
-  /* 5. radius */
+  /* 6. radius */
   --radius-none: 0;
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-full: 9999px;
 
-  /* 6. border */
+  /* 7. border */
   --border-0: 0px;
   --border-1: 1px;
   --border-2: 2px;
   --border-4: 4px;
 
-  /* 7. outline */
+  /* 8. outline */
   --outline-0: 0px;
   --outline-1: 1px;
   --outline-2: 2px;
   --outline-4: 4px;
 
-  /* 8. transition */
+  /* 9. transition (shorthand) */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* 9. color */
+  /* 10. duration  → duration-* */
+  --duration-fast: 150ms;
+  --duration-slow: 300ms;
+
+  /* 11. ease  → ease-* */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+  /* 12. color */
   --color-background: oklch(1 0 0);
   --color-foreground: oklch(14% 0.00002 271.152);
-  /* add more colors... */
+  /* Drives bg-, text-, border-, outline-, fill-, stroke-, decoration-, caret-, accent- */
 
-  /* 10. shadow */
+  /* 13. shadow */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg:
     0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
-  /* 11. line-height */
+  /* 14. blur  → blur-* / backdrop-blur-* */
+  --blur-sm: 4px;
+  --blur-md: 8px;
+  --blur-lg: 16px;
+
+  /* 15. line-height */
   --line-height-sm: 1;
   --line-height-md: 1.25;
   --line-height-lg: 2;
-  /* and more... */
+
+  /* 16. z-index  → z-* (custom, extends static z-0/10/20/…) */
+  --z-index-dropdown: 1000;
+  --z-index-modal: 1400;
+
+  /* 17. aspect  → aspect-* (custom, extends static aspect-square/video) */
+  --aspect-photo: 4 / 3;
+
+  /* 18. order  → order-* (custom, extends static order-0..12) */
+  --order-header: 1;
 }
 
 /* Manual dark mode */
@@ -398,11 +424,28 @@ interface StaticRule {
 
 **Default Static Rules (Pre-added)**
 
+A curated, Tailwind-like set covering:
+
+- Display, Box-sizing, Isolation, Position, Float/Clear, Overflow, Overscroll
+- Flexbox & Grid (including `grid-cols-1..12`, `grid-rows-1..6`, `col-span-1..12`, `row-span-1..6`, `col-start/end-*`, `row-start/end-*`, `grid-flow-*`, `auto-cols-*`, `auto-rows-*`)
+- Align / Justify / Place (`items-*`, `justify-*`, `justify-items-*`, `self-*`, `justify-self-*`, `content-*`, `place-items-*`, `place-content-*`, `place-self-*`)
+- Order (`order-0..12`, `order-first`, `order-last`, `order-none`)
+- Vertical align, Text align, Text transform, Font style (`italic`, `not-italic`)
+- Text decoration, Text overflow (`truncate`, `text-ellipsis`, `text-clip`), Whitespace, Word break
+- Lists (`list-disc`, `list-decimal`, `list-inside`, …)
+- Cursor, User-select, Pointer events, Resize, Appearance
+- Scroll behavior, Scroll snap (`snap-x`, `snap-y`, `snap-mandatory`, `snap-start`, …)
+- Opacity, Z-index (`z-0..50`), Visibility, Object fit/position, Aspect ratio (`aspect-square`, `aspect-video`, `aspect-auto`)
+- Outline/Border styles & offsets, Auto margins, Width/Height sizing keywords
+
 ```javascript
   // e.g.
   { class: "flex", css: "display: flex" },
+  { class: "grid-cols-3", css: "grid-template-columns: repeat(3, minmax(0, 1fr))" },
+  { class: "col-span-2", css: "grid-column: span 2 / span 2" },
+  { class: "truncate", css: "overflow: hidden; text-overflow: ellipsis; white-space: nowrap" },
   // + all important static rules
-  // please refer the source code for more details
+  // please refer the source code for the full list
 ```
 
 ## 2. Token Rules
@@ -418,6 +461,29 @@ interface TokenRule {
 ```
 
 **Default Token Rules (Pre-added)**
+
+Token rules are active only when you define matching `--{token}-*` variables. Categories below generate utilities automatically:
+
+| Token           | Example prefixes                                                                                                     |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `spacing`       | `p-`, `px-`, `py-`, `m-`, `w-`, `h-`, `min-w-`, `max-h-`, `gap-`, `gap-x-`, `inset-`, `top-`, `basis-`, `scroll-m-`, `scroll-p-` |
+| `color`         | `bg-`, `text-`, `border-`, `outline-`, `fill-`, `stroke-`, `decoration-`, `caret-`, `accent-`                       |
+| `radius`        | `rounded-`                                                                                                           |
+| `border`        | `border-` (width)                                                                                                    |
+| `outline`       | `outline-` (width)                                                                                                   |
+| `font-size`     | `text-`                                                                                                              |
+| `font-weight`   | `font-`                                                                                                              |
+| `font-family`   | `font-`                                                                                                              |
+| `letter-spacing`| `tracking-`                                                                                                          |
+| `line-height`   | `leading-`                                                                                                           |
+| `shadow`        | `shadow-`                                                                                                            |
+| `transition`    | `transition-`                                                                                                        |
+| `duration`      | `duration-`                                                                                                          |
+| `ease`          | `ease-`                                                                                                              |
+| `blur`          | `blur-`, `backdrop-blur-`                                                                                            |
+| `z-index`       | `z-`                                                                                                                 |
+| `aspect`        | `aspect-`                                                                                                            |
+| `order`         | `order-`                                                                                                             |
 
 ```javascript
  // e.g. token: spacing
@@ -530,6 +596,13 @@ Apply utilities based on parent or sibling element states. Perfect for hover eff
 // Group Direct variants (immediate children only)
 { name: "group-hover-direct", type: "ancestor", selector: ".group:hover >" },
 { name: "group-focus-direct", type: "ancestor", selector: ".group:focus >" },
+{ name: "group-active-direct", type: "ancestor", selector: ".group:active >" },
+
+// Peer variants (sibling states)
+{ name: "peer-hover", type: "ancestor", selector: ".peer:hover ~" },
+{ name: "peer-focus", type: "ancestor", selector: ".peer:focus ~" },
+{ name: "peer-checked", type: "ancestor", selector: ".peer:checked ~" },
+{ name: "peer-disabled", type: "ancestor", selector: ".peer:disabled ~" },
 // ... and more (see source for complete list)
 ```
 

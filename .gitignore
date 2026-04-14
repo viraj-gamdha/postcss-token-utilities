@@ -23,6 +23,8 @@ Thumbs.db
 
 # Testing
 coverage/
+.claude/
+.prompt.md
 
 # Misc
 *.tgz

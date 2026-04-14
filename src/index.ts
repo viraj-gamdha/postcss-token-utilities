@@ -1,7 +1,8 @@
 import { type PluginCreator, parse } from "postcss";
-import fs from "fs";
-import { join, resolve } from "path";
-import { createHash } from "crypto";
+import fs from "node:fs";
+import { join, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import glob from "fast-glob";
 import {
   DEFAULT_CLASS_MATCHER,
@@ -9,7 +10,6 @@ import {
   DEFAULT_TOKEN_RULES,
   DEFAULT_VARIANT_RULES,
 } from "./default-config";
-import { pathToFileURL } from "url";
 
 const PLUGIN_NAME = "postcss-token-utilities";
 const RULES_FILE_NAMES = [
@@ -17,6 +17,14 @@ const RULES_FILE_NAMES = [
   "token-utilities.rules.js",
   "token-utilities.rules.mjs",
 ];
+
+// Module-level regex constants (compile once)
+const ROOT_BLOCK_REGEX = /:root\s*\{([\s\S]*?)\}/;
+const CSS_VAR_REGEX = /--([\w-]+)\s*:\s*([^;]+)/g;
+const CUSTOM_MEDIA_REGEX = /@custom-media\s+--([a-z0-9-]+)\s+\(([^)]+)\)/g;
+const QUOTED_STRING_REGEX = /["'`]([^"'`]+)["'`]/g;
+const VALID_CLASS_REGEX = /^[a-zA-Z0-9_:.-]+$/;
+const WHITESPACE_SPLIT_REGEX = /\s+/;
 
 // Types
 export type DesignTokens = Record<string, Record<string, string>>;
@@ -90,27 +98,29 @@ const fileScanCache = new Map<
 >();
 
 class ClassExtractor {
-  private matchers: string[];
+  private matcherRegex: RegExp;
 
   constructor(matchers: string[] = []) {
-    this.matchers = [...DEFAULT_CLASS_MATCHER, ...(matchers || [])];
+    const allMatchers = [...DEFAULT_CLASS_MATCHER, ...(matchers || [])];
+    // Escape regex special chars in matcher names
+    const escaped = allMatchers.map((m) =>
+      m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    );
+    // Single-pass regex across all matchers
+    this.matcherRegex = new RegExp(`(?:${escaped.join("|")})`, "g");
   }
 
   extract(content: string): Set<string> {
     const classes = new Set<string>();
+    const matcherRe = this.matcherRegex;
+    matcherRe.lastIndex = 0;
 
-    for (const matcher of this.matchers) {
-      // Find all positions where matcher appears
-      let index = 0;
-      while ((index = content.indexOf(matcher, index)) !== -1) {
-        // Get the next 500 characters after the matcher (covers most use cases)
-        const chunk = content.substring(index, index + 500);
-
-        // Extract all quoted strings from this chunk
-        this.extractQuotedStrings(chunk, classes);
-
-        index += matcher.length;
-      }
+    let m: RegExpExecArray | null;
+    while ((m = matcherRe.exec(content)) !== null) {
+      const start = m.index + m[0].length;
+      // Window of 500 chars covers typical className / clsx / cn() usage
+      const chunk = content.substring(start, start + 500);
+      this.extractQuotedStrings(chunk, classes);
     }
 
     return classes;
@@ -118,42 +128,35 @@ class ClassExtractor {
 
   // Covers "class", 'class', `class`, arrays, objects, etc.
   private extractQuotedStrings(text: string, classes: Set<string>): void {
-    // Match all quoted strings: "...", '...', `...`
-    const quotedStrings = text.matchAll(/["'`]([^"'`]+)["'`]/g);
-
-    for (const match of quotedStrings) {
-      const content = match[1];
-
-      // Split by whitespace to get individual classes
-      content.split(/\s+/).forEach((className) => {
-        className = className.trim();
-
-        // Validate: must look like a valid utility class
-        if (this.isValidClassName(className)) {
-          classes.add(className);
+    QUOTED_STRING_REGEX.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = QUOTED_STRING_REGEX.exec(text)) !== null) {
+      const parts = match[1].split(WHITESPACE_SPLIT_REGEX);
+      for (let i = 0; i < parts.length; i++) {
+        const name = parts[i];
+        if (name && this.isValidClassName(name)) {
+          classes.add(name);
         }
-      });
+      }
     }
   }
 
   // Filter out obvious non-classes (URLs, paths, long strings)
   private isValidClassName(str: string): boolean {
-    if (!str || str.length === 0 || str.length > 100) return false;
+    const len = str.length;
+    if (len === 0 || len > 100) return false;
 
-    // Skip obvious non-classes
-    if (
-      str.includes("://") || // URLs
-      str.includes("\\") || // Paths
-      str.startsWith("/") || // Paths
-      str.includes("(") || // Functions
-      str.includes("{") || // Objects
-      str.includes("[") // Arrays
-    ) {
-      return false;
+    // Skip obvious non-classes (fast char checks before regex)
+    for (let i = 0; i < len; i++) {
+      const c = str.charCodeAt(i);
+      // '(' 40, '{' 123, '[' 91, '\\' 92
+      if (c === 40 || c === 123 || c === 91 || c === 92) return false;
     }
+    if (str.charCodeAt(0) === 47 /* '/' */) return false;
+    if (str.includes("://")) return false;
 
     // Valid class: letters, numbers, hyphens, colons, underscores, dots
-    return /^[a-zA-Z0-9_:.-]+$/.test(str);
+    return VALID_CLASS_REGEX.test(str);
   }
 }
 
@@ -195,17 +198,25 @@ class UtilityGenerator {
   }
 
   private parseTokens(css: string) {
-    const rootMatch = css.match(/:root\s*\{([\s\S]*?)\}/);
+    const rootMatch = css.match(ROOT_BLOCK_REGEX);
     if (!rootMatch) return;
 
-    const categories = [...new Set(this.rules.token.map((r) => r.token))];
-    const varRegex = /--([\w-]+)\s*:\s*([^;]+)/g;
-    let match: RegExpExecArray | null;
+    // Sort categories by length (desc) so longer prefixes (e.g. "font-size")
+    // are matched before shorter ones (e.g. "font")
+    const categories = [
+      ...new Set(this.rules.token.map((r) => r.token)),
+    ].sort((a, b) => b.length - a.length);
 
-    while ((match = varRegex.exec(rootMatch[1])) !== null) {
+    CSS_VAR_REGEX.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = CSS_VAR_REGEX.exec(rootMatch[1])) !== null) {
       const varName = match[1];
       for (const cat of categories) {
-        if (varName.startsWith(`${cat}-`)) {
+        if (
+          varName.length > cat.length + 1 &&
+          varName.charCodeAt(cat.length) === 45 /* '-' */ &&
+          varName.startsWith(cat)
+        ) {
           const key = varName.substring(cat.length + 1);
           if (!this.tokens[cat]) this.tokens[cat] = {};
           this.tokens[cat][key] = `var(--${varName})`;
@@ -216,33 +227,37 @@ class UtilityGenerator {
   }
 
   private parseMedia(css: string) {
-    const mediaRegex = /@custom-media\s+--([a-z0-9-]+)\s+\(([^)]+)\)/g;
+    CUSTOM_MEDIA_REGEX.lastIndex = 0;
     let match: RegExpExecArray | null;
     const existing = new Set(this.rules.variant.map((v) => v.name));
 
-    while ((match = mediaRegex.exec(css)) !== null) {
+    while ((match = CUSTOM_MEDIA_REGEX.exec(css)) !== null) {
       if (!existing.has(match[1])) {
         this.rules.variant.push({
           name: match[1],
           type: "media",
           condition: match[2],
         });
+        existing.add(match[1]);
       }
     }
   }
 
-  build() {
+  build(opts: { collectRaw: boolean }) {
     const map = new Map<string, string>();
     const raw: string[] = [];
+    const variants = this.rules.variant;
+    const collectRaw = opts.collectRaw;
 
     const add = (cls: string, css: string) => {
       // Base
       const base = `.${cls} { ${css} }`;
       map.set(cls, base);
-      raw.push(base);
+      if (collectRaw) raw.push(base);
 
       // Variants
-      for (const v of this.rules.variant) {
+      for (let i = 0; i < variants.length; i++) {
+        const v = variants[i];
         const escaped = `${v.name}\\:${cls}`;
         const lookup = `${v.name}:${cls}`;
         let vCss = "";
@@ -257,22 +272,26 @@ class UtilityGenerator {
 
         if (vCss) {
           map.set(lookup, vCss);
-          raw.push(vCss);
+          if (collectRaw) raw.push(vCss);
         }
       }
     };
 
     // Static
-    this.rules.static.forEach((r) => add(r.class, r.css));
+    for (let i = 0; i < this.rules.static.length; i++) {
+      const r = this.rules.static[i];
+      add(r.class, r.css);
+    }
 
     // Tokens
-    this.rules.token.forEach((r) => {
+    for (let i = 0; i < this.rules.token.length; i++) {
+      const r = this.rules.token[i];
       const cat = this.tokens[r.token];
-      if (cat)
-        Object.entries(cat).forEach(([k, v]) =>
-          add(`${r.prefix}${k}`, r.css(k, v)),
-        );
-    });
+      if (!cat) continue;
+      for (const k in cat) {
+        add(`${r.prefix}${k}`, r.css(k, cat[k]));
+      }
+    }
 
     return { map, raw };
   }
@@ -389,15 +408,6 @@ const postcssTokenUtilities: PluginCreator<PluginOptions> = (
         }
       }
 
-      const configHash = createHash("md5")
-        .update(
-          tokenCss +
-            mediaCss +
-            JSON.stringify(finalOpts.extend || {}) +
-            JSON.stringify(finalOpts.defaultRules || {}),
-        )
-        .digest("hex");
-
       const defaultOutPath = "src/styles/utilities.gen.css";
 
       const rawOutPath =
@@ -418,17 +428,28 @@ const postcssTokenUtilities: PluginCreator<PluginOptions> = (
 
       const GEN_CSS_PATTERN = "**/*.gen.css";
 
+      const shouldWriteGenerated = !!(finalOpts.generated && outPath);
+
+      const configHash = createHash("md5")
+        .update(
+          tokenCss +
+            mediaCss +
+            JSON.stringify(finalOpts.extend || {}) +
+            JSON.stringify(finalOpts.defaultRules || {}),
+        )
+        .digest("hex");
+
       if (universeCache?.configHash !== configHash) {
         const gen = new UtilityGenerator(finalOpts, {
           tokens: tokenCss,
           media: mediaCss,
         });
-        const { map, raw } = gen.build();
-        const rawCss = raw.join("\n");
+        const { map, raw } = gen.build({ collectRaw: shouldWriteGenerated });
+        const rawCss = shouldWriteGenerated ? raw.join("\n") : "";
         universeCache = { configHash, cssMap: map, rawCss };
 
         // Write to disk (Only on Universe change & if option is there)
-        if (finalOpts.generated && outPath) {
+        if (shouldWriteGenerated) {
           const header = [
             "/* ========================================= */",
             "/* AUTO-GENERATED FILE                       */",
@@ -488,35 +509,61 @@ const postcssTokenUtilities: PluginCreator<PluginOptions> = (
         onlyFiles: true,
       });
 
-      let filesRead = 0;
-      for (const file of files) {
+      // Prune cache entries for files no longer in the content glob
+      if (fileScanCache.size > files.length) {
+        const activeFiles = new Set(files);
+        for (const cachedFile of fileScanCache.keys()) {
+          if (!activeFiles.has(cachedFile)) {
+            fileScanCache.delete(cachedFile);
+          }
+        }
+      }
+
+      // Stat all files in parallel, then read only the ones that changed
+      const toRead: string[] = [];
+      const statResults = await Promise.all(
+        files.map((f) => fs.promises.stat(f).then((s) => ({ f, s }))),
+      );
+
+      for (const { f, s } of statResults) {
         result.messages.push({
           type: "dependency",
           plugin: PLUGIN_NAME,
-          file,
+          file: f,
           parent: result.opts.from,
         });
-
-        const stats = fs.statSync(file);
-        const cached = fileScanCache.get(file);
-
-        if (cached && cached.mtime === stats.mtimeMs) {
+        const cached = fileScanCache.get(f);
+        if (cached && cached.mtime === s.mtimeMs) {
           cached.classes.forEach((c) => usedClasses.add(c));
         } else {
-          const classes = extractor.extract(fs.readFileSync(file, "utf-8"));
-          fileScanCache.set(file, { mtime: stats.mtimeMs, classes });
+          toRead.push(f);
+        }
+      }
+
+      if (toRead.length > 0) {
+        const contents = await Promise.all(
+          toRead.map((f) => fs.promises.readFile(f, "utf-8")),
+        );
+        for (let i = 0; i < toRead.length; i++) {
+          const f = toRead[i];
+          const classes = extractor.extract(contents[i]);
+          const mtime =
+            statResults.find((r) => r.f === f)?.s.mtimeMs ?? Date.now();
+          fileScanCache.set(f, { mtime, classes });
           classes.forEach((c) => usedClasses.add(c));
-          filesRead++;
         }
       }
 
       const injectLines: string[] = [];
-      usedClasses.forEach((c) => {
-        const css = universeCache?.cssMap.get(c);
-        if (css) injectLines.push(css);
-      });
+      const cssMap = universeCache?.cssMap;
+      if (cssMap) {
+        usedClasses.forEach((c) => {
+          const css = cssMap.get(c);
+          if (css) injectLines.push(css);
+        });
+      }
 
-      if (filesRead > 0 && enableLogs)
+      if (toRead.length > 0 && enableLogs)
         console.log(
           `[${PLUGIN_NAME}]: ${injectLines.length} utilities injected.`,
         );
