@@ -409,7 +409,7 @@ export function Example() {
 
 The plugin generates utilities from three types of rules:
 
-> View the [source code](https://github.com/viraj-gamdha/postcss-token-utilities/blob/main/src/default-config.ts) for the complete list of default rules.
+> View the [source code](https://github.com/aplance-tech/postcss-token-utilities/blob/main/src/default-config.ts) for the complete list of default rules.
 
 ## 1. Static Rules
 
@@ -809,7 +809,7 @@ MIT
 ## Links
 
 - [npm](https://www.npmjs.com/package/postcss-token-utilities)
-- [GitHub](https://github.com/viraj-gamdha/postcss-token-utilities)
+- [GitHub](https://github.com/aplance-tech/postcss-token-utilities)
 
 ## Support
 
