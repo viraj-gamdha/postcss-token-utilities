@@ -1,8 +1,11 @@
 {
   "name": "postcss-token-utilities",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Token-driven utility CSS generator for PostCSS with JIT-style injection.",
-  "author": "Viraj Gamdha <viraj@aplance.com>",
+  "author": "Aplance Tech <tech.aplance@gmail.com>",
+  "contributors": [
+    "Viraj Gamdha <viraj@aplance.com>"
+  ],
   "license": "MIT",
   "type": "module",
   "main": "dist/index.cjs",
@@ -40,12 +43,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/viraj-gamdha/postcss-token-utilities.git"
+    "url": "git+https://github.com/aplance-tech/postcss-token-utilities.git"
   },
   "bugs": {
-    "url": "https://github.com/viraj-gamdha/postcss-token-utilities/issues"
+    "url": "https://github.com/aplance-tech/postcss-token-utilities/issues"
   },
-  "homepage": "https://github.com/viraj-gamdha/postcss-token-utilities#readme",
+  "homepage": "https://github.com/aplance-tech/postcss-token-utilities#readme",
   "engines": {
     "node": "^14 || ^16 || >=18"
   },
